@@ -27,6 +27,5 @@ EXPOSE 5000
 ENV PYTHONPATH=/app
 ENV FLASK_APP=src/main.py
 
-# Run the application
-CMD ["python", "src/main.py"]
-
+# Run the application using Gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "src.main:app"]
