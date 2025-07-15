@@ -1,166 +1,123 @@
 import torch
 import torch.nn as nn
-import torchvision.transforms as transforms
+from torchvision import transforms
 from PIL import Image
 import numpy as np
 import os
 
+# Define the Encoder class from the Kaggle notebook
+class Encoder(nn.Module):
+    """
+    A lightweight CNN that encodes an image into a low-dimensional vector space.
+    This is the core of the Prototypical Network.
+    """
+    def __init__(self, embedding_dim):
+        super(Encoder, self).__init__()
+        self.features = nn.Sequential(
+            # Block 1: 128 -> 64
+            nn.Conv2d(3, 32, kernel_size=3, padding=1), nn.ReLU(), nn.BatchNorm2d(32), nn.MaxPool2d(2),
+            # Block 2: 64 -> 32
+            nn.Conv2d(32, 64, kernel_size=3, padding=1), nn.ReLU(), nn.BatchNorm2d(64), nn.MaxPool2d(2),
+            # Block 3: 32 -> 16
+            nn.Conv2d(64, 128, kernel_size=3, padding=1), nn.ReLU(), nn.BatchNorm2d(128), nn.MaxPool2d(2),
+            # Block 4: 16 -> 8
+            nn.Conv2d(128, 256, kernel_size=3, padding=1), nn.ReLU(), nn.BatchNorm2d(256), nn.MaxPool2d(2),
+            # Final Pooling and Flattening
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Flatten()
+        )
+        # projection head to map features to the target embedding dimension
+        self.projection = nn.Linear(256, embedding_dim)
+
+    def forward(self, x):
+        return self.projection(self.features(x))
+
 class MLPredictionService:
-    """Service for ML model inference."""
-    
-    def __init__(self, model_path=None):
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = None
-        self.transform = self._get_image_transform()
-        self.stress_classes = ['healthy', 'drought', 'fungal', 'unknown']
-        
-        # Load model if path is provided
-        if model_path and os.path.exists(model_path):
-            self.load_model(model_path)
-        else:
-            # Create a dummy model for demonstration
-            self.model = self._create_dummy_model()
-    
-    def _get_image_transform(self):
-        """Get image preprocessing transform."""
-        return transforms.Compose([
-            transforms.Resize((224, 224)),
+    def __init__(self, model_path, prototypes_path, embedding_dim=64):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = Encoder(embedding_dim).to(self.device)
+        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+        self.model.eval()
+
+        # Load global prototypes
+        self.global_prototypes = torch.load(prototypes_path, map_location=self.device)
+
+        # These should match the classes from your training dataset
+        self.class_names = [
+            'Apple___Apple_scab',
+            'Apple___Black_rot',
+            'Apple___Cedar_apple_rust',
+            'Apple___healthy',
+            'Blueberry___healthy',
+            'Cherry_(including_sour)___Powdery_mildew',
+            'Cherry_(including_sour)___healthy',
+            'Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot',
+            'Corn_(maize)___Common_rust_',
+            'Corn_(maize)___Northern_Leaf_Blight',
+            'Corn_(maize)___healthy',
+            'Grape___Black_rot',
+            'Grape___Esca_(Black_Measles)',
+            'Grape___Leaf_blight_(Isariopsis_Leaf_Spot)',
+            'Grape___healthy',
+            'Orange___Haunglongbing_(Citrus_greening)',
+            'Peach___Bacterial_spot',
+            'Peach___healthy',
+            'Pepper,_bell___Bacterial_spot',
+            'Pepper,_bell___healthy',
+            'Potato___Early_blight',
+            'Potato___Late_blight',
+            'Potato___healthy',
+            'Raspberry___healthy',
+            'Soybean___healthy',
+            'Squash___Powdery_mildew',
+            'Strawberry___Leaf_scorch',
+            'Strawberry___healthy',
+            'Tomato___Bacterial_spot',
+            'Tomato___Early_blight',
+            'Tomato___Late_blight',
+            'Tomato___Leaf_Mold',
+            'Tomato___Septoria_leaf_spot',
+            'Tomato___Spider_mites Two-spotted_spider_mite',
+            'Tomato___Target_Spot',
+            'Tomato___Tomato_Yellow_Leaf_Curl_Virus',
+            'Tomato___Tomato_mosaic_virus',
+            'Tomato___healthy'
+        ]
+        self.num_classes = len(self.class_names)
+        self.embedding_dim = embedding_dim
+
+        # Define the image transformations
+        self.transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(256),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # ImageNet stats
+            transforms.Normalize([0.4739, 0.4901, 0.4228], [0.2282, 0.2231, 0.2415])
         ])
-    
-    def _create_dummy_model(self):
-        """Create a dummy model for demonstration purposes."""
-        class DummyModel(nn.Module):
-            def __init__(self, num_classes=4):
-                super(DummyModel, self).__init__()
-                self.features = nn.Sequential(
-                    nn.Conv2d(3, 64, kernel_size=3, padding=1),
-                    nn.ReLU(inplace=True),
-                    nn.AdaptiveAvgPool2d((1, 1))
-                )
-                self.classifier = nn.Linear(64, num_classes)
-            
-            def forward(self, x):
-                x = self.features(x)
-                x = x.view(x.size(0), -1)
-                x = self.classifier(x)
-                return x
-        
-        model = DummyModel(num_classes=len(self.stress_classes))
-        model.to(self.device)
-        model.eval()
-        return model
-    
-    def load_model(self, model_path):
-        """Load a trained model from file."""
-        try:
-            self.model = torch.load(model_path, map_location=self.device)
-            self.model.eval()
-            print(f"Model loaded from {model_path}")
-        except Exception as e:
-            print(f"Error loading model: {e}")
-            self.model = self._create_dummy_model()
-    
-    def preprocess_image(self, image_path):
-        """Preprocess image for model inference."""
-        try:
-            image = Image.open(image_path).convert('RGB')
-            image_tensor = self.transform(image).unsqueeze(0)  # Add batch dimension
-            return image_tensor.to(self.device)
-        except Exception as e:
-            print(f"Error preprocessing image: {e}")
-            return None
-    
-    def preprocess_environmental_data(self, weather_data, soil_data):
-        """Preprocess environmental data for model inference."""
-        features = []
-        
-        # Weather features
-        if weather_data:
-            features.extend([
-                weather_data.get('temperature', 0),
-                weather_data.get('humidity', 0),
-                weather_data.get('pressure', 0),
-                weather_data.get('wind_speed', 0),
-                weather_data.get('cloudiness', 0),
-                weather_data.get('precipitation_1h', 0)
-            ])
-        else:
-            features.extend([0] * 6)  # Default values
-        
-        # Soil features
-        if soil_data:
-            features.extend([
-                soil_data.get('ph_water', 7.0),
-                soil_data.get('organic_carbon', 0),
-                soil_data.get('nitrogen', 0),
-                soil_data.get('sand_content', 0),
-                soil_data.get('clay_content', 0),
-                soil_data.get('silt_content', 0)
-            ])
-        else:
-            features.extend([7.0, 0, 0, 0, 0, 0])  # Default values
-        
-        # Normalize features (simple min-max scaling for demo)
-        features = np.array(features, dtype=np.float32)
-        
-        # Convert to tensor
-        return torch.tensor(features).unsqueeze(0).to(self.device)
-    
-    def predict(self, image_path, weather_data=None, soil_data=None):
-        """
-        Run inference on image and environmental data.
-        
-        Args:
-            image_path (str): Path to the image file
-            weather_data (dict): Weather data from external API
-            soil_data (dict): Soil data from external API
-            
-        Returns:
-            dict: Prediction results with stress scores
-        """
-        try:
-            if not self.model:
-                return None
-            
-            # Preprocess image
-            image_tensor = self.preprocess_image(image_path)
-            if image_tensor is None:
-                return None
-            
-            # For this demo, we'll use only the image for prediction
-            # In a real implementation, you would fuse image and environmental features
-            with torch.no_grad():
-                outputs = self.model(image_tensor)
-                probabilities = torch.softmax(outputs, dim=1)
-                probs = probabilities.cpu().numpy()[0]
-            
-            # Create stress scores dictionary
-            stress_scores = {}
-            for i, class_name in enumerate(self.stress_classes):
-                stress_scores[class_name] = float(probs[i])
-            
-            # Add some randomness for demo purposes (remove in real implementation)
-            import random
-            stress_scores = {
-                'healthy': random.uniform(0.1, 0.9),
-                'drought': random.uniform(0.0, 0.8),
-                'fungal': random.uniform(0.0, 0.6),
-                'unknown': random.uniform(0.0, 0.3)
-            }
-            
-            # Normalize to sum to 1
-            total = sum(stress_scores.values())
-            stress_scores = {k: v/total for k, v in stress_scores.items()}
-            
-            return {
-                'stress_scores': stress_scores,
-                'dominant_stress': max(stress_scores, key=stress_scores.get),
-                'confidence': max(stress_scores.values())
-            }
-            
-        except Exception as e:
-            print(f"Error during prediction: {e}")
-            return None
+
+    def predict_image(self, image_path):
+        image = Image.open(image_path).convert("RGB")
+        image_tensor = self.transform(image).unsqueeze(0).to(self.device)
+
+        with torch.no_grad():
+            embedding = self.model(image_tensor)
+            dists = torch.cdist(embedding, self.global_prototypes)
+            preds = torch.argmin(dists, dim=1)
+            predicted_class_index = preds.item()
+            predicted_class_name = self.class_names[predicted_class_index]
+
+            # Calculate confidence score (softmax of negative distances)
+            confidence_scores = torch.nn.functional.softmax(-dists, dim=1)
+            confidence = confidence_scores[0][predicted_class_index].item()
+
+        return {
+            "predicted_class": predicted_class_name,
+            "confidence": confidence,
+            "stress_level": "high" if "healthy" not in predicted_class_name else "low"
+        }
+
+# Initialize the service with the model path and prototypes path
+model_path = os.path.join(os.path.dirname(__file__), "..", "..", "plant_disease_prototypical_final.pth")
+prototypes_path = os.path.join(os.path.dirname(__file__), "..", "..", "global_prototypes.pt")
+ml_service = MLPredictionService(model_path, prototypes_path)
+
 
