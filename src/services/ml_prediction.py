@@ -37,12 +37,12 @@ class MLPredictionService:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = Encoder(embedding_dim).to(self.device)
 
-        # Load state_dict and remove \'_orig_mod.\' prefix if present
+        # Load state_dict and remove 
         state_dict = torch.load(model_path, map_location=self.device)
         new_state_dict = {}
         for k, v in state_dict.items():
-            if k.startswith(\'_orig_mod.\'):
-                new_state_dict[k[len(\'_orig_mod.\'):]] = v
+            if k.startswith("_orig_mod."):
+                new_state_dict[k[len("_orig_mod."):]] = v
             else:
                 new_state_dict[k] = v
         self.model.load_state_dict(new_state_dict)
@@ -53,44 +53,44 @@ class MLPredictionService:
 
         # These should match the classes from your training dataset
         self.class_names = [
-            \'Apple___Apple_scab\',
-            \'Apple___Black_rot\',
-            \'Apple___Cedar_apple_rust\',
-            \'Apple___healthy\',
-            \'Blueberry___healthy\',
-            \'Cherry_(including_sour)___Powdery_mildew\',
-            \'Cherry_(including_sour)___healthy\',
-            \'Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot\',
-            \'Corn_(maize)___Common_rust_\',
-            \'Corn_(maize)___Northern_Leaf_Blight\',
-            \'Corn_(maize)___healthy\',
-            \'Grape___Black_rot\',
-            \'Grape___Esca_(Black_Measles)\,\
-            \'Grape___Leaf_blight_(Isariopsis_Leaf_Spot)\,\
-            \'Grape___healthy\',
-            \'Orange___Haunglongbing_(Citrus_greening)\,\
-            \'Peach___Bacterial_spot\',
-            \'Peach___healthy\',
-            \'Pepper,_bell___Bacterial_spot\',
-            \'Pepper,_bell___healthy\',
-            \'Potato___Early_blight\',
-            \'Potato___Late_blight\',
-            \'Potato___healthy\',
-            \'Raspberry___healthy\',
-            \'Soybean___healthy\',
-            \'Squash___Powdery_mildew\',
-            \'Strawberry___Leaf_scorch\',
-            \'Strawberry___healthy\',
-            \'Tomato___Bacterial_spot\',
-            \'Tomato___Early_blight\',
-            \'Tomato___Late_blight\',
-            \'Tomato___Leaf_Mold\',
-            \'Tomato___Septoria_leaf_spot\',
-            \'Tomato___Spider_mites Two-spotted_spider_mite\',
-            \'Tomato___Target_Spot\',
-            \'Tomato___Tomato_Yellow_Leaf_Curl_Virus\',
-            \'Tomato___Tomato_mosaic_virus\',
-            \'Tomato___healthy\'
+            'Apple___Apple_scab',
+            'Apple___Black_rot',
+            'Apple___Cedar_apple_rust',
+            'Apple___healthy',
+            'Blueberry___healthy',
+            'Cherry_(including_sour)___Powdery_mildew',
+            'Cherry_(including_sour)___healthy',
+            'Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot',
+            'Corn_(maize)___Common_rust_',
+            'Corn_(maize)___Northern_Leaf_Blight',
+            'Corn_(maize)___healthy',
+            'Grape___Black_rot',
+            'Grape___Esca_(Black_Measles)',
+            'Grape___Leaf_blight_(Isariopsis_Leaf_Spot)',
+            'Grape___healthy',
+            'Orange___Haunglongbing_(Citrus_greening)',
+            'Peach___Bacterial_spot',
+            'Peach___healthy',
+            'Pepper,_bell___Bacterial_spot',
+            'Pepper,_bell___healthy',
+            'Potato___Early_blight',
+            'Potato___Late_blight',
+            'Potato___healthy',
+            'Raspberry___healthy',
+            'Soybean___healthy',
+            'Squash___Powdery_mildew',
+            'Strawberry___Leaf_scorch',
+            'Strawberry___healthy',
+            'Tomato___Bacterial_spot',
+            'Tomato___Early_blight',
+            'Tomato___Late_blight',
+            'Tomato___Leaf_Mold',
+            'Tomato___Septoria_leaf_spot',
+            'Tomato___Spider_mites Two-spotted_spider_mite',
+            'Tomato___Target_Spot',
+            'Tomato___Tomato_Yellow_Leaf_Curl_Virus',
+            'Tomato___Tomato_mosaic_virus',
+            'Tomato___healthy'
         ]
         self.num_classes = len(self.class_names)
         self.embedding_dim = embedding_dim
